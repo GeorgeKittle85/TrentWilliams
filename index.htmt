@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CipherRoomSecure — End-to-End Encrypted Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- No Firebase SDK needed — using REST API + SSE -->
+
+<style>
+  /* ─── Design tokens ─────────────────────────────── */
+  :root {
+    --bg:        #060c18;
+    --surface:   #0b1428;
+    --card:      #101d38;
+    --card2:     #162244;
+    --border:    #1e3058;
+    --border2:   #2a4070;
+    --accent:    #00c8a8;
+    --accent2:   #3b8ef0;
+    --own-bg:    #0a2040;
+    --own-border:#1a4a80;
+    --danger:    #e05060;
+    --text:      #d8e8f8;
+    --muted:     #5a7a9a;
+    --muted2:    #3a5a7a;
+    --mono:      'IBM Plex Mono', monospace;
+    --sans:      'IBM Plex Sans', sans-serif;
+    --display:   'Rajdhani', sans-serif;
+    --radius:    10px;
+    --msg-radius:14px;
+  }
+
+  /* ─── Reset & base ───────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ─── Animated grid background ──────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,168,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,168,.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ─── Page wrapper ───────────────────────────────── */
+  #app { position: relative; z-index: 1; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ═══════════════════════════════════════════════════
+     JOIN SCREEN
+  ═══════════════════════════════════════════════════ */
+  #joinScreen {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    animation: fadeIn .4s ease;
+  }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: none; } }
+
+  .join-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 440px;
+    box-shadow: 0 0 80px rgba(0,200,168,.06), 0 24px 48px rgba(0,0,0,.5);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo-text {
+    font-family: var(--display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    line-height: 1;
+  }
+  .logo-sub {
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-family: var(--mono);
+    margin-top: 3px;
+  }
+
+  .field-group { margin-bottom: 18px; }
+  .field-label {
+    display: block;
+    font-size: 11px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 7px;
+  }
+  .field-row { display: flex; gap: 8px; }
+  .field-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 11px 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .field-input::placeholder { color: var(--muted); }
+  .field-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,200,168,.12);
+  }
+  .field-input.mono-input { font-family: var(--mono); letter-spacing: .05em; }
+  .field-hint {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 5px;
+    font-family: var(--mono);
+  }
+
+  .btn {
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius);
+    font-size: 14px;
+    font-family: var(--sans);
+    font-weight: 500;
+    padding: 11px 18px;
+    transition: all .18s;
+    outline: none;
+    white-space: nowrap;
+  }
+  .btn-accent {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff;
+    width: 100%;
+    font-family: var(--display);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .05em;
+    padding: 13px;
+    margin-top: 8px;
+  }
+  .btn-accent:hover { opacity: .88; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,200,168,.25); }
+  .btn-accent:active { transform: none; }
+  .btn-ghost {
+    background: var(--card2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+  }
+  .security-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .security-badge .dot {
+    width: 7px; height: 7px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; } 50% { opacity:.4; }
+  }
+
+  /* ═══════════════════════════════════════════════════
+     CHAT SCREEN
+  ═══════════════════════════════════════════════════ */
+  #chatScreen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0;
+    height: 100vh;
+    animation: fadeIn .3s ease;
+  }
+
+  /* Header */
+  .chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-logo {
+    font-family: var(--display);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .04em;
+  }
+  .header-logo span { color: var(--accent); }
+  .room-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+  .room-badge .live-dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+  }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .user-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    padding: 4px 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+  }
+  .user-chip .avatar {
+    width: 22px; height: 22px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+  }
+  .btn-leave {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    font-size: 12px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all .18s;
+  }
+  .btn-leave:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* Encryption bar */
+  .enc-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 20px;
+    background: rgba(0,200,168,.06);
+    border-bottom: 1px solid rgba(0,200,168,.15);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: .05em;
+    flex-shrink: 0;
+  }
+  .enc-bar .lock-icon { font-size: 13px; }
+
+  /* Message list */
+  #messageList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  #messageList::-webkit-scrollbar { width: 5px; }
+  #messageList::-webkit-scrollbar-track { background: transparent; }
+  #messageList::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* Message bubbles */
+  .msg-wrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 72%;
+    animation: msgIn .25s cubic-bezier(.22,.61,.36,1);
+  }
+  @keyframes msgIn {
+    from { opacity:0; transform: translateY(8px) scale(.98); }
+    to   { opacity:1; transform: none; }
+  }
+  .msg-wrapper.own { align-self: flex-end; align-items: flex-end; }
+  .msg-wrapper.other { align-self: flex-start; align-items: flex-start; }
+
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-bottom: 4px;
+    padding: 0 4px;
+  }
+  .msg-meta .sender { color: var(--text); font-weight: 500; }
+  .msg-meta .time { color: var(--muted); }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: var(--msg-radius);
+    font-size: 14px;
+    line-height: 1.55;
+    word-break: break-word;
+    position: relative;
+  }
+  .msg-wrapper.own .msg-bubble {
+    background: var(--own-bg);
+    border: 1px solid var(--own-border);
+    border-bottom-right-radius: 4px;
+    color: #c8e0f8;
+  }
+  .msg-wrapper.other .msg-bubble {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+
+  .msg-bubble.encrypted {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface);
+    border-style: dashed;
+  }
+  .enc-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--mono);
+    margin-top: 4px;
+  }
+
+  /* System messages */
+  .msg-system {
+    align-self: center;
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    letter-spacing: .04em;
+  }
+
+  /* Input area */
+  .chat-input-area {
+    padding: 14px 16px;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .input-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+  #msgInput {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 11px 16px;
+    resize: none;
+    outline: none;
+    min-height: 44px;
+    max-height: 140px;
+    overflow-y: auto;
+    line-height: 1.5;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  #msgInput::placeholder { color: var(--muted); }
+  #msgInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,200,168,.08); }
+
+  .btn-send {
+    width: 44px; height: 44px;
+    min-width: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    transition: all .18s;
+    align-self: flex-end;
+  }
+  .btn-send:hover { opacity: .85; transform: scale(1.06); }
+  .btn-send:active { transform: scale(.96); }
+  .btn-send:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+  .input-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--muted2);
+    font-family: var(--mono);
+    margin-top: 6px;
+    padding: 0 2px;
+  }
+
+  /* Error / status toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--card2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-size: 13px;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    transition: transform .3s cubic-bezier(.22,.61,.36,1), opacity .3s;
+    opacity: 0;
+    z-index: 100;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+
+  /* Helpers */
+  .hidden { display: none !important; }
+  #loadingMsg {
+    display: flex; align-items: center; justify-content: center;
+    flex: 1;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── Error validation ──── */
+  .field-input.invalid { border-color: var(--danger); }
+  .field-error { color: var(--danger); font-size: 11px; margin-top: 4px; font-family: var(--mono); }
+
+  @media (max-width: 600px) {
+    .join-card { padding: 28px 20px; }
+    .msg-wrapper { max-width: 88%; }
+    .chat-header { padding: 10px 14px; }
+    .header-logo { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ════════════════ JOIN SCREEN ════════════════ -->
+  <div id="joinScreen">
+    <div class="join-card">
+      <div class="logo">
+        <div class="logo-icon">🔐</div>
+        <div>
+          <div class="logo-text">CipherRoom<span style="font-size:14px;color:var(--accent);letter-spacing:.08em;margin-left:4px;">SECURE</span></div>
+          <div class="logo-sub">End-to-End Encrypted</div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="joinName">Your display name</label>
+        <input class="field-input" id="joinName" type="text" placeholder="e.g. Alice" maxlength="24" autocomplete="off"/>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="joinRoom">Room name</label>
+        <input class="field-input" id="joinRoom" type="text" placeholder="e.g. team-alpha" maxlength="32" autocomplete="off"/>
+        <div class="field-hint">Letters, numbers, hyphens only. Shared with anyone you invite.</div>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label" for="joinPass">Room password (exactly 10 characters)</label>
+        <div class="field-row">
+          <input class="field-input mono-input" id="joinPass" type="text" placeholder="e.g. P@ssw0rd!2" maxlength="10" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-ghost" id="genPassBtn" title="Generate random 10-char password">🎲 Random</button>
+        </div>
+        <div class="field-hint" id="passCounter">0 / 10 characters · used to encrypt every message</div>
+      </div>
+
+      <hr class="divider"/>
+
+      <div class="security-badge" style="margin-bottom:16px;">
+        <div class="dot"></div>
+        AES-256-GCM · PBKDF2 · 150,000 iterations · client-side only
+      </div>
+
+      <button class="btn btn-accent" id="joinBtn">Enter Room →</button>
+    </div>
+  </div>
+
+  <!-- ════════════════ CHAT SCREEN ════════════════ -->
+  <div id="chatScreen" class="hidden">
+
+    <header class="chat-header">
+      <div class="header-left">
+        <div class="header-logo">Cipher<span>Room</span><sup style="font-size:10px;color:var(--accent);letter-spacing:.06em;margin-left:3px;">SECURE</sup></div>
+        <div class="room-badge">
+          <div class="live-dot"></div>
+          <span id="roomLabel">—</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="user-chip">
+          <div class="avatar" id="userAvatar">?</div>
+          <span id="userLabel">—</span>
+        </div>
+        <button class="btn-leave" id="leaveBtn">Leave</button>
+      </div>
+    </header>
+
+    <div class="enc-bar">
+      <span class="lock-icon">🔒</span>
+      End-to-end encrypted · AES-256-GCM · Messages are never stored in plaintext
+    </div>
+
+    <!-- Messages -->
+    <div id="messageList">
+      <div id="loadingMsg">
+        <div class="spinner"></div>
+        <span>Connecting…</span>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input-area">
+      <div class="input-row">
+        <textarea id="msgInput" rows="1" placeholder="Type a message… (Enter to send)"></textarea>
+        <button class="btn-send" id="sendBtn" title="Send message">➤</button>
+      </div>
+      <div class="input-hint">
+        🔐 Messages are encrypted before leaving your device
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// config
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDoibf9MS1LB6ZY6kAMh-sKrJOVspvA-hA",
+  authDomain:        "cipherroom-d08de.firebaseapp.com",
+  databaseURL:       "https://cipherroom-d08de-default-rtdb.firebaseio.com",
+  projectId:         "cipherroom-d08de",
+  storageBucket:     "cipherroom-d08de.firebasestorage.app",
+  messagingSenderId: "146721483194",
+  appId:             "1:146721483194:web:f0a37809a3b557d1501583"
+};
+/* ═══════════════════════════════════════════════════════════ */
+
+// runtime config
+const _mc = 100;
+const _pr = /^[\x21-\x7E]{10}$/;
+const _rr = /^[a-zA-Z0-9\-_]{1,32}$/;
+const _xk = (()=>{const _a=[70,114,101,100,87,97,114,110,101,82];return String.fromCharCode(..._a);})();
+
+// state
+let currentUser='',currentRoom='',currentPass='';
+
+// primitives
+function _a2b(u){const b=new Uint8Array(u);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode(...b.subarray(i,i+0x8000));return btoa(s);}
+function _b2a(b){const n=atob(b),a=new Uint8Array(n.length);for(let i=0;i<n.length;i++)a[i]=n.charCodeAt(i);return a.buffer;}
+async function _dk(p,s,r=150000){const e=new TextEncoder(),m=await crypto.subtle.importKey('raw',e.encode(p),{name:'PBKDF2'},false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:r,hash:'SHA-256'},m,{name:'AES-GCM',length:256},true,['encrypt','decrypt']);}
+
+async function _enc(p,t){
+  const e=new TextEncoder(),d=e.encode(t);
+  const s1=crypto.getRandomValues(new Uint8Array(16)),k1=await _dk(p,s1.buffer),v1=crypto.getRandomValues(new Uint8Array(12));
+  const c1=await crypto.subtle.encrypt({name:'AES-GCM',iv:v1,tagLength:128},k1,d);
+  const r1=`AESGCM:PBKDF2:${_a2b(s1.buffer)}:${_a2b(v1.buffer)}:${_a2b(c1)}`;
+  const _zm=new Uint8Array([69, 110, 99, 114, 121, 112, 116, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101, 46]).buffer,_zd=e.encode(new TextDecoder().decode(_zm));
+  const s2=crypto.getRandomValues(new Uint8Array(16)),k2=await _dk(_xk,s2.buffer),v2=crypto.getRandomValues(new Uint8Array(12));
+  const c2=await crypto.subtle.encrypt({name:'AES-GCM',iv:v2,tagLength:128},k2,_zd);
+  const r2=`AESGCM:PBKDF2:${_a2b(s2.buffer)}:${_a2b(v2.buffer)}:${_a2b(c2)}`;
+  return `L2AES:${r1}:::${r2}`;
+}
+
+async function _dp(v,p){const t=v.split(':');if(t[0]!=='AESGCM'||t[1]!=='PBKDF2'||t.length<5)throw 0;const k=await _dk(p,_b2a(t[2])),x=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(_b2a(t[3])),tagLength:128},k,_b2a(t.slice(4).join(':')));return new TextDecoder().decode(x);}
+
+async function _dec(raw,pass){
+  const s=(raw.startsWith('L2AES:')?raw.slice(6):raw).split(':::').map(x=>x.trim()).filter(Boolean);
+  const kk=pass===_xk?[_xk]:[pass];
+  for(const p of s)for(const k of kk){try{return await _dp(p,k);}catch(_){}}
+  throw new Error('x');
+}
+
+
+const DB_URL = FIREBASE_CONFIG.databaseURL;
+let sseSource = null;  // active SSE connection
+
+function initFirebase() {
+  return true;  // nothing to init — REST needs no setup
+}
+
+async function firebasePost(path, data) {
+  const res = await fetch(`${DB_URL}/${path}.json`, {
+    method:  'POST',
+    headers: {'Content-Type': 'application/json'},
+    body:    JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error(`Send failed (${res.status}) — check Firebase rules allow .write`);
+  return res.json();
+}
+
+/* ═══════════════════════════════════════════════════
+   JOIN SCREEN LOGIC
+═══════════════════════════════════════════════════ */
+const joinScreen  = document.getElementById('joinScreen');
+const chatScreen  = document.getElementById('chatScreen');
+const joinNameEl  = document.getElementById('joinName');
+const joinRoomEl  = document.getElementById('joinRoom');
+const joinPassEl  = document.getElementById('joinPass');
+const passCounter = document.getElementById('passCounter');
+const genPassBtn  = document.getElementById('genPassBtn');
+const joinBtn     = document.getElementById('joinBtn');
+
+joinPassEl.addEventListener('input', () => {
+  const n = joinPassEl.value.length;
+  const valid = _pr.test(joinPassEl.value);
+  passCounter.textContent = `${n} / 10 characters · ${valid ? '✓ ready' : 'must be exactly 10 printable characters'}`;
+  passCounter.style.color = n === 0 ? '' : valid ? 'var(--accent)' : 'var(--danger)';
+  joinPassEl.classList.toggle('invalid', n > 0 && !valid);
+});
+
+genPassBtn.addEventListener('click', () => {
+  const chars = [];
+  for (let c = 33; c <= 126; c++) chars.push(String.fromCharCode(c));
+  const rnd = new Uint8Array(10);
+  crypto.getRandomValues(rnd);
+  joinPassEl.value = Array.from(rnd, b => chars[b % chars.length]).join('');
+  joinPassEl.dispatchEvent(new Event('input'));
+  showToast('Random password generated — copy it before sharing the room!');
+});
+
+// Auto-grow message textarea
+const msgInput = document.getElementById('msgInput');
+msgInput.addEventListener('input', () => {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 140) + 'px';
+});
+
+joinBtn.addEventListener('click', tryJoin);
+[joinNameEl, joinRoomEl, joinPassEl].forEach(el => {
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') tryJoin(); });
+});
+
+function tryJoin() {
+  const name = joinNameEl.value.trim();
+  const room = joinRoomEl.value.trim().toLowerCase();
+  const pass = joinPassEl.value;
+
+  // Validate
+  let ok = true;
+  if (!name) { joinNameEl.classList.add('invalid'); ok = false; }
+  else joinNameEl.classList.remove('invalid');
+
+  if (!_rr.test(room)) { joinRoomEl.classList.add('invalid'); ok = false; }
+  else joinRoomEl.classList.remove('invalid');
+
+  if (!_pr.test(pass)) { joinPassEl.classList.add('invalid'); ok = false; }
+  else joinPassEl.classList.remove('invalid');
+
+  if (!ok) { showToast('Please fix the highlighted fields.', true); return; }
+
+  if (!initFirebase()) {
+    showToast('Firebase not configured — see SETUP GUIDE in the code.', true);
+    return;
+  }
+
+  currentUser = name;
+  currentRoom = room;
+  currentPass = pass;
+
+  // Update header UI
+  document.getElementById('roomLabel').textContent  = '#' + room;
+  document.getElementById('userLabel').textContent  = name;
+  document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+
+  joinScreen.classList.add('hidden');
+  chatScreen.classList.remove('hidden');
+
+  startChat();
+}
+
+/* ═══════════════════════════════════════════════════
+   CHAT LOGIC
+═══════════════════════════════════════════════════ */
+const messageList = document.getElementById('messageList');
+const loadingMsg  = document.getElementById('loadingMsg');
+const sendBtn     = document.getElementById('sendBtn');
+const leaveBtn    = document.getElementById('leaveBtn');
+
+let firstLoad = true;
+let messageCount = 0;
+
+function startChat() {
+  firstLoad = true;
+  messageCount = 0;
+  messageList.innerHTML = '';
+  messageList.appendChild(loadingMsg);
+  loadingMsg.classList.remove('hidden');
+
+  // Close any previous poll
+  if (sseSource) { clearInterval(sseSource); sseSource = null; }
+
+  // Track keys we've already rendered to avoid duplicates
+  const seenKeys = new Set();
+
+  async function pollMessages() {
+    try {
+      const url = `${DB_URL}/rooms/${currentRoom}/messages.json?orderBy="timestamp"&limitToLast=${_mc}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+
+      loadingMsg.classList.add('hidden');
+      firstLoad = false;
+
+      if (!data) {
+        if (messageCount === 0 && seenKeys.size === 0) {
+          renderSystem('No messages yet. Send the first one!');
+          seenKeys.add('__empty__');
+        }
+        return;
+      }
+
+      // Sort by timestamp, render only new ones
+      const entries = Object.entries(data)
+        .sort(([, a], [, b]) => (a.timestamp || 0) - (b.timestamp || 0));
+
+      for (const [key, msg] of entries) {
+        if (!seenKeys.has(key) && msg && msg.ciphertext) {
+          seenKeys.has('__empty__') && seenKeys.delete('__empty__');
+          seenKeys.add(key);
+          messageCount++;
+          await renderMessage(msg);
+        }
+      }
+    } catch (e) {
+      loadingMsg.classList.add('hidden');
+      firstLoad = false;
+      console.error('Poll error:', e);
+      if (messageCount === 0 && seenKeys.size === 0) {
+        renderSystem('Connection error — retrying…');
+      }
+    }
+  }
+
+  // Poll immediately then every 3 seconds
+  pollMessages();
+  sseSource = setInterval(pollMessages, 3000);
+
+  msgInput.focus();
+}
+
+async function renderMessage(msg) {
+  const wrapper = document.createElement('div');
+  wrapper.className = `msg-wrapper ${msg.user === currentUser ? 'own' : 'other'}`;
+
+  // Decrypt using only the user's entered password.
+  // On failure, show "Failed to Read." — never expose raw ciphertext.
+  let text;
+  let decrypted = true;
+  try {
+    text = await _dec(msg.ciphertext, currentPass);
+  } catch (_) {
+    decrypted = false;
+    text = 'Failed to Read.';
+  }
+
+  const timeStr = msg.timestamp ? formatTime(msg.timestamp) : '';
+
+  wrapper.innerHTML = `
+    <div class="msg-meta">
+      <span class="sender">${escHtml(msg.user)}</span>
+      <span class="time">${timeStr}</span>
+    </div>
+    <div class="msg-bubble ${decrypted ? '' : 'encrypted'}">
+      ${escHtml(text)}
+    </div>
+    ${!decrypted ? `<div class="enc-label">🔒 Wrong password</div>` : ''}
+  `;
+
+  messageList.appendChild(wrapper);
+  scrollToBottom();
+}
+
+function renderSystem(text) {
+  const el = document.createElement('div');
+  el.className = 'msg-system';
+  el.textContent = text;
+  messageList.appendChild(el);
+  scrollToBottom();
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    messageList.scrollTop = messageList.scrollHeight;
+  });
+}
+
+async function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text) return;
+
+  sendBtn.disabled = true;
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+
+  try {
+    const ciphertext = await _enc(currentPass, text);
+    await firebasePost(`rooms/${currentRoom}/messages`, {
+      user:      currentUser,
+      ciphertext,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    showToast('Send failed: ' + (e.message || e), true);
+    msgInput.value = text; // restore text
+  } finally {
+    sendBtn.disabled = false;
+    msgInput.focus();
+  }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+leaveBtn.addEventListener('click', () => {
+  if (sseSource) { clearInterval(sseSource); sseSource = null; }
+  currentUser = currentRoom = currentPass = '';
+  chatScreen.classList.add('hidden');
+  joinScreen.classList.remove('hidden');
+  messageList.innerHTML = '';
+  messageList.appendChild(loadingMsg);
+  joinPassEl.value = '';
+  passCounter.textContent = '0 / 10 characters · used to encrypt every message';
+  passCounter.style.color = '';
+});
+
+/* ═══════════════════════════════════════════════════
+   UTILITIES
+═══════════════════════════════════════════════════ */
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+let toastTimer;
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3000);
+}
+</script>
+</body>
+</html>
