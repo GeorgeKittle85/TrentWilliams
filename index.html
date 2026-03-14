@@ -666,7 +666,7 @@ function initFirebase() {
 }
 
 // Writes routed through Cloudflare Worker relay on tahceruces.win.
-const _wr = '/relay';
+const _wr = 'https://tahceruces.win/relay';
 
 async function firebasePost(path, data) {
   const _ru = `${_wr}/${path}.json`;
