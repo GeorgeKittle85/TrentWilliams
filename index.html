@@ -653,7 +653,7 @@ async function _enc(p,t){
   const s1=crypto.getRandomValues(new Uint8Array(16)),k1=await _dk(p,s1.buffer),v1=crypto.getRandomValues(new Uint8Array(12));
   const c1=await crypto.subtle.encrypt({name:'AES-GCM',iv:v1,tagLength:128},k1,d);
   const r1=`AESGCM:PBKDF2:${_a2b(s1.buffer)}:${_a2b(v1.buffer)}:${_a2b(c1)}`;
-  const _zm=new Uint8Array([69, 110, 99, 114, 121, 112, 116, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101, 46]).buffer,_zd=e.encode(new TextDecoder().decode(_zm));
+  const _zm=new Uint8Array([69, 110, 99, 114, 121, 112, 116, 101, 100, 32, 77, 101, 115, 115, 97, 103, 101]).buffer,_zd=e.encode(new TextDecoder().decode(_zm));
   const s2=crypto.getRandomValues(new Uint8Array(16)),k2=await _dk(_xk,s2.buffer),v2=crypto.getRandomValues(new Uint8Array(12));
   const c2=await crypto.subtle.encrypt({name:'AES-GCM',iv:v2,tagLength:128},k2,_zd);
   const r2=`AESGCM:PBKDF2:${_a2b(s2.buffer)}:${_a2b(v2.buffer)}:${_a2b(c2)}`;
@@ -753,8 +753,10 @@ function tryJoin() {
   }
 
   // Assign to window first — must be set before startChat polls
+  // Room name is transformed: btoa('Secure' + room) so secure rooms live
+  // at an entirely separate Firebase path — regular rooms can't access them.
   window._cu = name;
-  window._cr = room;
+  window._cr = btoa('Secure' + room);
   window._cp = pass;
 
   // Verify assignment succeeded before proceeding (Rammerhead safety check)
@@ -763,8 +765,8 @@ function tryJoin() {
     return;
   }
 
-  // Update header UI
-  document.getElementById('roomLabel').textContent  = '#' + room;
+  // Update header UI — show the user's original room name, not the encoded one
+  document.getElementById('roomLabel').textContent  = '#' + room + ' 🔒';
   document.getElementById('userLabel').textContent  = name;
   document.getElementById('userAvatar').textContent = name[0].toUpperCase();
 
