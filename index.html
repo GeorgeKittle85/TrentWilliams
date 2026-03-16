@@ -729,6 +729,20 @@ async function _gfp() {
 // Fingerprint stored on window so it survives Rammerhead scope rewriting
 window._fp = null;
 
+// ── Ban list — checked against Firebase /_banned/ on join and send ───────
+window._banned = false; // set true if this fingerprint is banned
+
+async function _checkBan() {
+  if (!window._fp) window._fp = await _gfp();
+  const id = window._fp.id;
+  try {
+    const res = await fetch(`${DB_URL}/_banned/${id}.json`);
+    if (!res.ok) return false;
+    const val = await res.json();
+    return val === true;
+  } catch(_) { return false; } // fail open — don't block if check fails
+}
+
 const DB_URL = FIREBASE_CONFIG.databaseURL;
 let sseSource = null;  // active SSE connection
 
@@ -788,7 +802,7 @@ joinBtn.addEventListener('click', tryJoin);
   el.addEventListener('keydown', e => { if (e.key === 'Enter') tryJoin(); });
 });
 
-function tryJoin() {
+async function tryJoin() {
   const name = joinNameEl.value.trim();
   const room = joinRoomEl.value.trim().toLowerCase();
   const pass = joinPassEl.value;
@@ -821,6 +835,15 @@ function tryJoin() {
   // Verify assignment succeeded before proceeding (Rammerhead safety check)
   if (!window._cr) {
     showToast('Session error — please try again.', true);
+    return;
+  }
+
+  // Check ban list before entering room
+  window._fp = await _gfp();
+  window._banned = await _checkBan();
+  if (window._banned) {
+    showToast('Your device is not allowed to use this chat.');
+    window._cu = window._cr = window._cp = '';
     return;
   }
 
@@ -996,6 +1019,18 @@ async function sendMessage() {
   msgInput.style.height = 'auto';
 
   try {
+    // Collect fingerprint for ban check (not sent with message)
+    if (!window._fp) window._fp = await _gfp();
+
+    // Re-check ban in case it was set after join
+    if (window._banned || await _checkBan()) {
+      window._banned = true;
+      showToast('Your device is not allowed to use this chat.');
+      sendBtn.disabled = false;
+      msgInput.value = text;
+      return;
+    }
+
     const ciphertext = await _enc(window._cp, text);
     await firebasePost(`rooms/${window._cr}/messages`, {
       user:      window._cu,
