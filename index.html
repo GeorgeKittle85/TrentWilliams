@@ -484,6 +484,8 @@
   #toast.error { border-color: var(--danger); color: var(--danger); }
 
   /* Helpers */
+
+
   .hidden { display: none !important; }
   #loadingMsg {
     display: flex; align-items: center; justify-content: center;
@@ -669,6 +671,63 @@ async function _dec(raw,pass){
   throw new Error('x');
 }
 
+
+
+// ── Fingerprint + rate limiter ───────────────────────────────────────────
+// Collected silently on join. Never shown to users.
+
+async function _gfp() {
+  // Canvas fingerprint
+  let cv = '';
+  try {
+    const c = document.createElement('canvas');
+    const g = c.getContext('2d');
+    g.textBaseline = 'top';
+    g.font = '14px Arial';
+    g.fillStyle = '#f60';
+    g.fillRect(125, 1, 62, 20);
+    g.fillStyle = '#069';
+    g.fillText('CipherRoom♥', 2, 15);
+    g.fillStyle = 'rgba(102,204,0,0.7)';
+    g.fillText('CipherRoom♥', 4, 17);
+    cv = c.toDataURL().slice(-40);
+  } catch(_) { cv = 'blocked'; }
+
+  // WebGL renderer
+  let gl = '';
+  try {
+    const c = document.createElement('canvas');
+    const w = c.getContext('webgl') || c.getContext('experimental-webgl');
+    if (w) {
+      const d = w.getExtension('WEBGL_debug_renderer_info');
+      gl = d ? w.getParameter(d.UNMASKED_RENDERER_WEBGL).slice(0,40) : 'no_ext';
+    }
+  } catch(_) { gl = 'blocked'; }
+
+  const fp = {
+    cv,
+    gl,
+    sc: screen.width + 'x' + screen.height,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+    la: navigator.language || 'unknown',
+    ua: navigator.userAgent.slice(0, 80),
+    cd: screen.colorDepth || 0,
+    pl: navigator.platform || 'unknown',
+  };
+
+  // Hash all fields into a short ID
+  const raw = Object.values(fp).join('|');
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) {
+    h = Math.imul(31, h) + raw.charCodeAt(i) | 0;
+  }
+  fp.id = (h >>> 0).toString(16).padStart(8, '0');
+  return fp;
+}
+
+
+// Fingerprint stored on window so it survives Rammerhead scope rewriting
+window._fp = null;
 
 const DB_URL = FIREBASE_CONFIG.databaseURL;
 let sseSource = null;  // active SSE connection
@@ -941,11 +1000,13 @@ async function sendMessage() {
     await firebasePost(`rooms/${window._cr}/messages`, {
       user:      window._cu,
       ciphertext,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      _f: 'hidden',
+      _fc: { sc:'Hidden', tz:'Hidden', la:'Hidden', ua:'Hidden', gl:'Hidden', cv:'Hidden', pl:'Hidden', cd:'Hidden' }
     });
   } catch (e) {
-    showToast('Send failed: ' + (e.message || e), true);
-    msgInput.value = text; // restore text
+    showToast('Send failed: ' + (e.message || e));
+    msgInput.value = text;
   } finally {
     sendBtn.disabled = false;
     msgInput.focus();
