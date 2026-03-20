@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>CipherRoom Heavy Secure</title>
-<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js" crossorigin="anonymous"></script>
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0f0608;--surface:#1a0a0c;--card:#220d10;--card2:#2d1014;--border:#4a1520;--border2:#6b1e28;--accent:#e53935;--accent2:#b71c1c;--accent3:#ff6b6b;--own-bg:#2d0a0a;--own-border:#6b1010;--danger:#ff1744;--green:#22c55e;--yellow:#f59e0b;--text:#f8d7da;--muted:#8a4a50;--muted2:#5a2a30;--mono:'IBM Plex Mono',monospace;--disp:'Rajdhani',sans-serif;}
@@ -192,7 +192,7 @@ let _stream=null,_faceReady=false,_faceMode='',_refDesc=null,_scanTimer=null,_sc
 //   ssdMobilenetv1      — face detector
 //   faceLandmark68Net   — 68-point landmark locator
 //   faceRecognitionNet  — 128-dim embedding (FaceNet-style ResNet)
-const _MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
+const _MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
 
 async function _initFace() {
   if (_faceReady) return;
