@@ -1,4 +1,5 @@
 <!doctype html>
+
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
@@ -109,7 +110,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;bac
     <div class="f-group"><label class="f-label">NATO passphrase (26 words in order)</label><input class="inp" id="inpNato" type="text" placeholder="Alfa Bravo Charlie … Zulu" autocomplete="off" spellcheck="false"/><div class="hint">All 26 NATO words, space-separated. Order matters.</div></div>
     <div class="f-group"><label class="f-label">Date (ddmmyyyy)</label><input class="inp" id="inpDate" type="text" placeholder="17032026" maxlength="8" autocomplete="off"/></div>
     <hr class="divider"/>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:10px;letter-spacing:.08em;"><span class="dot red"></span>Face verification required · 90%+ match threshold</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:10px;letter-spacing:.08em;"><span class="dot red"></span>Face verification required · 80%+ match threshold</div>
     <button class="btn-main" id="btnContinue">Continue to Face Verification →</button>
   </div>
 </div>
@@ -171,226 +172,218 @@ async function _fbPut(p,v){const r=await fetch(_DB+'/'+p+'.json',{method:'PUT',h
 async function _fbPost(p,v){const r=await fetch(_DB+'/'+p+'.json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)});if(!r.ok)throw new Error('POST '+r.status);}
 
 // ── Validation ────────────────────────────────────────────────
-const _prPin=/^[\x21-\x7E]{10}$/,_prRoom=/^[a-zA-Z0-9\-_]{1,32}$/,_prDate=/^\d{8}$/;
+const _prPin=/^[\x21-\x7E]{10}$/,*prRoom=/^[a-zA-Z0-9-*]{1,32}$/,_prDate=/^\d{8}$/;
 
 // ── Triple AES ────────────────────────────────────────────────
-function _ab(u){const b=new Uint8Array(u);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode(...b.subarray(i,i+0x8000));return btoa(s);}
+function _ab(u){const b=new Uint8Array(u);let s=’’;for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode(…b.subarray(i,i+0x8000));return btoa(s);}
 function _ba(b){const n=atob(b),a=new Uint8Array(n.length);for(let i=0;i<n.length;i++)a[i]=n.charCodeAt(i);return a.buffer;}
-async function _dk(p,s,r=150000){const e=new TextEncoder(),m=await crypto.subtle.importKey('raw',e.encode(p),{name:'PBKDF2'},false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:s,iterations:r,hash:'SHA-256'},m,{name:'AES-GCM',length:256},true,['encrypt','decrypt']);}
-async function _aes_e(pass,plain){const e=new TextEncoder(),d=e.encode(plain),s=crypto.getRandomValues(new Uint8Array(16)),k=await _dk(pass,s.buffer),iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:'AES-GCM',iv,tagLength:128},k,d);return 'AESGCM:PBKDF2:'+_ab(s.buffer)+':'+_ab(iv.buffer)+':'+_ab(ct);}
-async function _aes_d(packed,pass){const t=packed.split(':');if(t[0]!=='AESGCM'||t[1]!=='PBKDF2'||t.length<5)throw 0;const k=await _dk(pass,_ba(t[2])),x=await crypto.subtle.decrypt({name:'AES-GCM',iv:new Uint8Array(_ba(t[3])),tagLength:128},k,_ba(t.slice(4).join(':')));return new TextDecoder().decode(x);}
-async function _enc3(pin,nato,date,plain){return 'L3AES:'+await _aes_e(date,await _aes_e(nato,await _aes_e(pin,plain)));}
-async function _dec3(ct,pin,nato,date){const i=ct.startsWith('L3AES:')?ct.slice(6):ct;return _aes_d(await _aes_d(await _aes_d(i,date),nato),pin);}
+async function _dk(p,s,r=150000){const e=new TextEncoder(),m=await crypto.subtle.importKey(‘raw’,e.encode(p),{name:‘PBKDF2’},false,[‘deriveKey’]);return crypto.subtle.deriveKey({name:‘PBKDF2’,salt:s,iterations:r,hash:‘SHA-256’},m,{name:‘AES-GCM’,length:256},true,[‘encrypt’,‘decrypt’]);}
+async function _aes_e(pass,plain){const e=new TextEncoder(),d=e.encode(plain),s=crypto.getRandomValues(new Uint8Array(16)),k=await _dk(pass,s.buffer),iv=crypto.getRandomValues(new Uint8Array(12)),ct=await crypto.subtle.encrypt({name:‘AES-GCM’,iv,tagLength:128},k,d);return ‘AESGCM:PBKDF2:’+_ab(s.buffer)+’:’+_ab(iv.buffer)+’:’+_ab(ct);}
+async function _aes_d(packed,pass){const t=packed.split(’:’);if(t[0]!==‘AESGCM’||t[1]!==‘PBKDF2’||t.length<5)throw 0;const k=await _dk(pass,_ba(t[2])),x=await crypto.subtle.decrypt({name:‘AES-GCM’,iv:new Uint8Array(_ba(t[3])),tagLength:128},k,_ba(t.slice(4).join(’:’)));return new TextDecoder().decode(x);}
+async function _enc3(pin,nato,date,plain){return ‘L3AES:’+await _aes_e(date,await _aes_e(nato,await _aes_e(pin,plain)));}
+async function _dec3(ct,pin,nato,date){const i=ct.startsWith(‘L3AES:’)?ct.slice(6):ct;return _aes_d(await _aes_d(await _aes_d(i,date),nato),pin);}
 
 // ── Session state ─────────────────────────────────────────────
-window._S={user:'',room:'',cr:'',pin:'',nato:'',date:'',verified:false};
+window._S={user:’’,room:’’,cr:’’,pin:’’,nato:’’,date:’’,verified:false};
 let _pollTimer=null,_pollFails=0,_seenKeys=new Set(),_msgCount=0;
-let _stream=null,_faceReady=false,_faceMode='',_refDesc=null,_scanTimer=null,_scanActive=false;
+let _stream=null,_faceReady=false,_faceMode=’’,_refDesc=null,_scanTimer=null,_scanActive=false;
 
 // ── face-api.js neural network init ──────────────────────────
-// Uses three ResNet/MobileNet models:
-//   ssdMobilenetv1      — face detector
-//   faceLandmark68Net   — 68-point landmark locator
-//   faceRecognitionNet  — 128-dim embedding (FaceNet-style ResNet)
-const _MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+const _MODEL_URL = ‘https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model’;
 
 async function _initFace() {
-  if (_faceReady) return;
-  await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(_MODEL_URL),
-    faceapi.nets.faceLandmark68Net.loadFromUri(_MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(_MODEL_URL),
-  ]);
-  _faceReady = true;
+if (_faceReady) return;
+await Promise.all([
+faceapi.nets.ssdMobilenetv1.loadFromUri(_MODEL_URL),
+faceapi.nets.faceLandmark68Net.loadFromUri(_MODEL_URL),
+faceapi.nets.faceRecognitionNet.loadFromUri(_MODEL_URL),
+]);
+_faceReady = true;
 }
 
-// Returns a Float32Array(128) neural embedding, or null if no face found
 async function _getDescriptor(input) {
-  const result = await faceapi
-    .detectSingleFace(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
-    .withFaceLandmarks()
-    .withFaceDescriptor();
-  return result ? result.descriptor : null;
+const result = await faceapi
+.detectSingleFace(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+.withFaceLandmarks()
+.withFaceDescriptor();
+return result ? result.descriptor : null;
 }
 
-// Neural distance → percentage (dist 0.0=100%, 0.10=90%, 1.0=0%)
 function _distToPct(dist) { return Math.round(Math.max(0, Math.min(100, (1 - dist) * 100))); }
 
-// Serialise Float32Array for Firebase storage
 function _descToArr(d) { return Array.from(d); }
 function _arrToDesc(a) { return new Float32Array(a); }
 
 // ── Screen 1: Account form ────────────────────────────────────
-document.getElementById('inpPin').addEventListener('input',function(){const n=this.value.length,ok=_prPin.test(this.value);document.getElementById('pinHint').textContent=n+' / 10'+(ok?' · ✓':'');document.getElementById('pinHint').style.color=n===0?'':ok?'var(--green)':'var(--danger)';});
-document.getElementById('btnPinRnd').addEventListener('click',()=>{const chars=[];for(let c=33;c<=126;c++)chars.push(String.fromCharCode(c));const rnd=new Uint8Array(10);crypto.getRandomValues(rnd);document.getElementById('inpPin').value=Array.from(rnd,b=>chars[b%chars.length]).join('');document.getElementById('inpPin').dispatchEvent(new Event('input'));});
-(()=>{const d=new Date(),dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0');document.getElementById('inpDate').value=dd+mm+d.getFullYear();})();
+document.getElementById(‘inpPin’).addEventListener(‘input’,function(){const n=this.value.length,ok=_prPin.test(this.value);document.getElementById(‘pinHint’).textContent=n+’ / 10’+(ok?’ · ✓’:’’);document.getElementById(‘pinHint’).style.color=n===0?’’:ok?‘var(–green)’:‘var(–danger)’;});
+document.getElementById(‘btnPinRnd’).addEventListener(‘click’,()=>{const chars=[];for(let c=33;c<=126;c++)chars.push(String.fromCharCode(c));const rnd=new Uint8Array(10);crypto.getRandomValues(rnd);document.getElementById(‘inpPin’).value=Array.from(rnd,b=>chars[b%chars.length]).join(’’);document.getElementById(‘inpPin’).dispatchEvent(new Event(‘input’));});
+(()=>{const d=new Date(),dd=String(d.getDate()).padStart(2,‘0’),mm=String(d.getMonth()+1).padStart(2,‘0’);document.getElementById(‘inpDate’).value=dd+mm+d.getFullYear();})();
 
-document.getElementById('btnContinue').addEventListener('click',async()=>{
-  const user=document.getElementById('inpUser').value.trim(),room=document.getElementById('inpRoom').value.trim().toLowerCase(),pin=document.getElementById('inpPin').value,nato=document.getElementById('inpNato').value.trim(),date=document.getElementById('inpDate').value.trim();
-  let ok=true;
-  if(!user){document.getElementById('inpUser').classList.add('invalid');ok=false;}else document.getElementById('inpUser').classList.remove('invalid');
-  if(!_prRoom.test(room)){document.getElementById('inpRoom').classList.add('invalid');ok=false;}else document.getElementById('inpRoom').classList.remove('invalid');
-  if(!_prPin.test(pin)){document.getElementById('inpPin').classList.add('invalid');ok=false;}else document.getElementById('inpPin').classList.remove('invalid');
-  if(!_prDate.test(date)){document.getElementById('inpDate').classList.add('invalid');ok=false;}else document.getElementById('inpDate').classList.remove('invalid');
-  if(nato.split(/\s+/).filter(Boolean).length!==26){showToast('NATO passphrase must be exactly 26 words.');ok=false;}
-  if(!ok)return;
-  window._S={user,room,cr:btoa('Heavy'+room),pin,nato:nato.split(/\s+/).filter(Boolean).join(' '),date,verified:false};
-  document.getElementById('screenAccount').classList.add('hidden');
-  document.getElementById('screenFace').classList.remove('hidden');
-  _startFaceScreen();
+document.getElementById(‘btnContinue’).addEventListener(‘click’,async()=>{
+const user=document.getElementById(‘inpUser’).value.trim(),room=document.getElementById(‘inpRoom’).value.trim().toLowerCase(),pin=document.getElementById(‘inpPin’).value,nato=document.getElementById(‘inpNato’).value.trim(),date=document.getElementById(‘inpDate’).value.trim();
+let ok=true;
+if(!user){document.getElementById(‘inpUser’).classList.add(‘invalid’);ok=false;}else document.getElementById(‘inpUser’).classList.remove(‘invalid’);
+if(!_prRoom.test(room)){document.getElementById(‘inpRoom’).classList.add(‘invalid’);ok=false;}else document.getElementById(‘inpRoom’).classList.remove(‘invalid’);
+if(!_prPin.test(pin)){document.getElementById(‘inpPin’).classList.add(‘invalid’);ok=false;}else document.getElementById(‘inpPin’).classList.remove(‘invalid’);
+if(!_prDate.test(date)){document.getElementById(‘inpDate’).classList.add(‘invalid’);ok=false;}else document.getElementById(‘inpDate’).classList.remove(‘invalid’);
+if(nato.split(/\s+/).filter(Boolean).length!==26){showToast(‘NATO passphrase must be exactly 26 words.’);ok=false;}
+if(!ok)return;
+window._S={user,room,cr:btoa(‘Heavy’+room),pin,nato:nato.split(/\s+/).filter(Boolean).join(’ ’),date,verified:false};
+document.getElementById(‘screenAccount’).classList.add(‘hidden’);
+document.getElementById(‘screenFace’).classList.remove(‘hidden’);
+_startFaceScreen();
 });
 
 // ── Screen 2: Face verification ───────────────────────────────
 async function _startFaceScreen(){
-  const faceTitle=document.getElementById('faceTitle'),faceSub=document.getElementById('faceSub'),faceInfo=document.getElementById('faceInfo'),camStatus=document.getElementById('camStatus');
-  faceTitle.textContent='Loading…';faceSub.textContent='Loading neural network models…';camStatus.textContent='Loading SSD + Landmark + Recognition nets…';
-  try{await _initFace();}catch(e){faceInfo.textContent='Failed to load neural network models. Check your internet connection.';camStatus.textContent='Model failed';camStatus.className='cam-status fail';return;}
-  let stored=null;
-  try{stored=await _fbGet('accounts/'+btoa(window._S.user+':'+window._S.room));}catch(_){}
-  if(stored&&stored.desc){
-    _faceMode='verify';_refDesc=_arrToDesc(stored.desc);
-    faceTitle.textContent='Identity Verification';faceSub.textContent='Confirm your identity';
-    faceInfo.innerHTML='Account found for <strong>'+escHtml(window._S.user)+'</strong>. Look at the camera — need <strong>90%+ neural match</strong> to enter.';
-  } else {
-    _faceMode='register';
-    faceTitle.textContent='Register Face';faceSub.textContent='New account';
-    faceInfo.innerHTML='No face on file for <strong>'+escHtml(window._S.user)+'</strong> in <strong>#'+escHtml(window._S.room)+'</strong>. Look at the camera then click Capture.';
-    document.getElementById('btnCapture').classList.remove('hidden');
-  }
-  await _startCam();
-  if(_faceMode==='verify')_startScan();
-  else{camStatus.textContent='Ready to capture';camStatus.className='cam-status scanning';}
+const faceTitle=document.getElementById(‘faceTitle’),faceSub=document.getElementById(‘faceSub’),faceInfo=document.getElementById(‘faceInfo’),camStatus=document.getElementById(‘camStatus’);
+faceTitle.textContent=‘Loading…’;faceSub.textContent=‘Loading neural network models…’;camStatus.textContent=‘Loading SSD + Landmark + Recognition nets…’;
+try{await _initFace();}catch(e){faceInfo.textContent=‘Failed to load neural network models. Check your internet connection.’;camStatus.textContent=‘Model failed’;camStatus.className=‘cam-status fail’;return;}
+let stored=null;
+try{stored=await _fbGet(‘accounts/’+btoa(window._S.user+’:’+window.*S.room));}catch(*){}
+if(stored&&stored.desc){
+_faceMode=‘verify’;_refDesc=_arrToDesc(stored.desc);
+faceTitle.textContent=‘Identity Verification’;faceSub.textContent=‘Confirm your identity’;
+faceInfo.innerHTML=‘Account found for <strong>’+escHtml(window._S.user)+’</strong>. Look at the camera — need <strong>80%+ neural match</strong> to enter.’;
+} else {
+_faceMode=‘register’;
+faceTitle.textContent=‘Register Face’;faceSub.textContent=‘New account’;
+faceInfo.innerHTML=‘No face on file for <strong>’+escHtml(window._S.user)+’</strong> in <strong>#’+escHtml(window._S.room)+’</strong>. Look at the camera then click Capture.’;
+document.getElementById(‘btnCapture’).classList.remove(‘hidden’);
+}
+await _startCam();
+if(_faceMode===‘verify’)_startScan();
+else{camStatus.textContent=‘Ready to capture’;camStatus.className=‘cam-status scanning’;}
 }
 
 async function _startCam(){
-  try{_stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'},audio:false});document.getElementById('camVideo').srcObject=_stream;await new Promise(r=>document.getElementById('camVideo').onloadedmetadata=r);}
-  catch(e){document.getElementById('camStatus').textContent='Camera denied';document.getElementById('camStatus').className='cam-status fail';document.getElementById('faceInfo').textContent='Camera access is required. Please allow camera and reload.';}
+try{_stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:‘user’},audio:false});document.getElementById(‘camVideo’).srcObject=_stream;await new Promise(r=>document.getElementById(‘camVideo’).onloadedmetadata=r);}
+catch(e){document.getElementById(‘camStatus’).textContent=‘Camera denied’;document.getElementById(‘camStatus’).className=‘cam-status fail’;document.getElementById(‘faceInfo’).textContent=‘Camera access is required. Please allow camera and reload.’;}
 }
 function _stopCam(){if(_stream){_stream.getTracks().forEach(t=>t.stop());_stream=null;}clearInterval(_scanTimer);_scanActive=false;}
 
 async function _captureFrame(){
-  const v=document.getElementById('camVideo'),c=document.createElement('canvas');
-  c.width=v.videoWidth||640;c.height=v.videoHeight||480;
-  const ctx=c.getContext('2d');ctx.translate(c.width,0);ctx.scale(-1,1);ctx.drawImage(v,0,0);ctx.setTransform(1,0,0,1,0,0);
-  const img=new Image();img.src=c.toDataURL('image/jpeg',.85);await new Promise(r=>{img.onload=r;});
-  return{img,canvas:c};
+const v=document.getElementById(‘camVideo’),c=document.createElement(‘canvas’);
+c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+const ctx=c.getContext(‘2d’);ctx.translate(c.width,0);ctx.scale(-1,1);ctx.drawImage(v,0,0);ctx.setTransform(1,0,0,1,0,0);
+const img=new Image();img.src=c.toDataURL(‘image/jpeg’,.85);await new Promise(r=>{img.onload=r;});
+return{img,canvas:c};
 }
 
-document.getElementById('btnCapture').addEventListener('click',async()=>{
-  const camStatus=document.getElementById('camStatus'),btnCapture=document.getElementById('btnCapture');
-  btnCapture.disabled=true;camStatus.textContent='Running neural detection…';camStatus.className='cam-status scanning';
-  try{
-    const{img}=await _captureFrame();
-    const desc=await _getDescriptor(img);
-    if(!desc){camStatus.textContent='No face detected — try again';camStatus.className='cam-status fail';btnCapture.disabled=false;return;}
-    // Store the 128-dim neural embedding in Firebase (no raw image needed)
-    await _fbPut('accounts/'+btoa(window._S.user+':'+window._S.room),{desc:_descToArr(desc),user:window._S.user,room:window._S.room,ts:Date.now()});
-    _refDesc=desc;_stopCam();
-    camStatus.textContent='✓ Face registered (128-dim neural embedding)';camStatus.className='cam-status ok';
-    document.getElementById('faceInfo').innerHTML='Neural face profile stored. You can now enter the chat.';
-    btnCapture.classList.add('hidden');
-    document.getElementById('btnEnter').classList.remove('hidden');
-    window._S.verified=true;
-  }catch(e){camStatus.textContent='Error: '+e.message;camStatus.className='cam-status fail';btnCapture.disabled=false;}
+document.getElementById(‘btnCapture’).addEventListener(‘click’,async()=>{
+const camStatus=document.getElementById(‘camStatus’),btnCapture=document.getElementById(‘btnCapture’);
+btnCapture.disabled=true;camStatus.textContent=‘Running neural detection…’;camStatus.className=‘cam-status scanning’;
+try{
+const{img}=await _captureFrame();
+const desc=await _getDescriptor(img);
+if(!desc){camStatus.textContent=‘No face detected — try again’;camStatus.className=‘cam-status fail’;btnCapture.disabled=false;return;}
+await _fbPut(‘accounts/’+btoa(window._S.user+’:’+window._S.room),{desc:_descToArr(desc),user:window._S.user,room:window._S.room,ts:Date.now()});
+_refDesc=desc;_stopCam();
+camStatus.textContent=‘✓ Face registered (128-dim neural embedding)’;camStatus.className=‘cam-status ok’;
+document.getElementById(‘faceInfo’).innerHTML=‘Neural face profile stored. You can now enter the chat.’;
+btnCapture.classList.add(‘hidden’);
+document.getElementById(‘btnEnter’).classList.remove(‘hidden’);
+window._S.verified=true;
+}catch(e){camStatus.textContent=’Error: ’+e.message;camStatus.className=‘cam-status fail’;btnCapture.disabled=false;}
 });
 
 function _startScan(){
-  const camStatus=document.getElementById('camStatus'),scoreBar=document.getElementById('scoreBar'),scoreLabel=document.getElementById('scoreLabel'),scoreBarWrap=document.getElementById('scoreBarWrap'),btnEnter=document.getElementById('btnEnter'),btnRetry=document.getElementById('btnRetry');
-  scoreBarWrap.classList.remove('hidden');scoreLabel.classList.remove('hidden');
-  camStatus.textContent='Neural scan active…';camStatus.className='cam-status scanning';
-  _scanActive=true;let bestScore=0,lastScan=0,attempts=0;
-  _scanTimer=setInterval(async()=>{
-    if(!_scanActive||Date.now()-lastScan<1200)return;
-    lastScan=Date.now();attempts++;
-    try{
-      const{img}=await _captureFrame();
-      const desc=await _getDescriptor(img);
-      if(!desc){camStatus.textContent='No face in frame';scoreLabel.textContent='—';scoreBar.style.width='0%';return;}
-      // Neural Euclidean distance on 128-dim embeddings (same as FaceNet)
-      const dist=faceapi.euclideanDistance(_refDesc,desc);
-      const pct=_distToPct(dist);
-      if(pct>bestScore)bestScore=pct;
-      const col=pct>=90?'var(--green)':pct>=70?'var(--yellow)':'var(--accent)';
-      scoreBar.style.width=pct+'%';scoreBar.style.background=col;
-      scoreLabel.textContent=pct+'%';scoreLabel.style.color=col;
-      if(pct>=90){
-        _scanActive=false;clearInterval(_scanTimer);
-        camStatus.textContent='✓ Neural match confirmed ('+pct+'%)';camStatus.className='cam-status ok';
-        window._S.verified=true;
-        setTimeout(()=>{_stopCam();btnEnter.classList.remove('hidden');},600);
-      } else {
-        camStatus.textContent='Scanning… best: '+bestScore+'% (dist: '+dist.toFixed(3)+')';
-        if(attempts>15&&bestScore<60)btnRetry.classList.remove('hidden');
-      }
-    }catch(_){}
-  },600);
+const camStatus=document.getElementById(‘camStatus’),scoreBar=document.getElementById(‘scoreBar’),scoreLabel=document.getElementById(‘scoreLabel’),scoreBarWrap=document.getElementById(‘scoreBarWrap’),btnEnter=document.getElementById(‘btnEnter’),btnRetry=document.getElementById(‘btnRetry’);
+scoreBarWrap.classList.remove(‘hidden’);scoreLabel.classList.remove(‘hidden’);
+camStatus.textContent=‘Neural scan active…’;camStatus.className=‘cam-status scanning’;
+_scanActive=true;let bestScore=0,lastScan=0,attempts=0;
+_scanTimer=setInterval(async()=>{
+if(!_scanActive||Date.now()-lastScan<1200)return;
+lastScan=Date.now();attempts++;
+try{
+const{img}=await _captureFrame();
+const desc=await _getDescriptor(img);
+if(!desc){camStatus.textContent=‘No face in frame’;scoreLabel.textContent=’—’;scoreBar.style.width=‘0%’;return;}
+const dist=faceapi.euclideanDistance(_refDesc,desc);
+const pct=_distToPct(dist);
+if(pct>bestScore)bestScore=pct;
+const col=pct>=80?‘var(–green)’:pct>=70?‘var(–yellow)’:‘var(–accent)’;
+scoreBar.style.width=pct+’%’;scoreBar.style.background=col;
+scoreLabel.textContent=pct+’%’;scoreLabel.style.color=col;
+if(pct>=80){
+_scanActive=false;clearInterval(_scanTimer);
+camStatus.textContent=‘✓ Neural match confirmed (’+pct+’%)’;camStatus.className=‘cam-status ok’;
+window._S.verified=true;
+setTimeout(()=>{*stopCam();btnEnter.classList.remove(‘hidden’);},600);
+} else {
+camStatus.textContent=‘Scanning… best: ‘+bestScore+’% (dist: ‘+dist.toFixed(3)+’)’;
+if(attempts>15&&bestScore<60)btnRetry.classList.remove(‘hidden’);
+}
+}catch(*){}
+},600);
 }
 
-document.getElementById('btnEnter').addEventListener('click',()=>{
-  _stopCam();
-  document.getElementById('screenFace').classList.add('hidden');
-  document.getElementById('chatScreen').classList.remove('hidden');
-  document.getElementById('roomLabel').textContent='#'+window._S.room+' 🔴';
-  document.getElementById('userLabel').textContent=window._S.user;
-  document.getElementById('userAvatar').textContent=window._S.user[0].toUpperCase();
-  _startChat();
+document.getElementById(‘btnEnter’).addEventListener(‘click’,()=>{
+_stopCam();
+document.getElementById(‘screenFace’).classList.add(‘hidden’);
+document.getElementById(‘chatScreen’).classList.remove(‘hidden’);
+document.getElementById(‘roomLabel’).textContent=’#’+window._S.room+’ 🔴’;
+document.getElementById(‘userLabel’).textContent=window._S.user;
+document.getElementById(‘userAvatar’).textContent=window._S.user[0].toUpperCase();
+_startChat();
 });
-document.getElementById('btnFaceBack').addEventListener('click',()=>{_stopCam();document.getElementById('screenFace').classList.add('hidden');document.getElementById('screenAccount').classList.remove('hidden');});
-document.getElementById('btnRetry').addEventListener('click',()=>{_scanActive=false;clearInterval(_scanTimer);document.getElementById('btnRetry').classList.add('hidden');document.getElementById('btnEnter').classList.add('hidden');_startScan();});
+document.getElementById(‘btnFaceBack’).addEventListener(‘click’,()=>{_stopCam();document.getElementById(‘screenFace’).classList.add(‘hidden’);document.getElementById(‘screenAccount’).classList.remove(‘hidden’);});
+document.getElementById(‘btnRetry’).addEventListener(‘click’,()=>{_scanActive=false;clearInterval(_scanTimer);document.getElementById(‘btnRetry’).classList.add(‘hidden’);document.getElementById(‘btnEnter’).classList.add(‘hidden’);_startScan();});
 
 // ── Chat ──────────────────────────────────────────────────────
 function _startChat(){
-  _msgCount=0;_pollFails=0;_seenKeys=new Set();
-  const ml=document.getElementById('msgList');ml.innerHTML='';
-  const sp=document.createElement('div');sp.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:12px;';sp.innerHTML='<div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Connecting…</span>';ml.appendChild(sp);
-  if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
-  setTimeout(_poll,300);_pollTimer=setInterval(_poll,3000);
-  document.getElementById('msgInput').focus();
+_msgCount=0;_pollFails=0;_seenKeys=new Set();
+const ml=document.getElementById(‘msgList’);ml.innerHTML=’’;
+const sp=document.createElement(‘div’);sp.style.cssText=‘display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:12px;’;sp.innerHTML=’<div class="spinner"></div><span style="font-size:12px;color:var(--muted);">Connecting…</span>’;ml.appendChild(sp);
+if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}
+setTimeout(_poll,300);_pollTimer=setInterval(_poll,3000);
+document.getElementById(‘msgInput’).focus();
 }
 
 async function _poll(){
-  if(!window._S.cr)return;
-  try{
-    const r=await fetch(_DB+'/rooms/'+window._S.cr+'/messages.json?shallow=true');
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const raw=await r.text();
-    const sp=document.getElementById('msgList').querySelector('div[style]');if(sp)sp.style.display='none';
-    _pollFails=0;
-    if(!raw||raw==='null'){if(_msgCount===0&&!_seenKeys.has('__e__')){_sys('No messages yet. Send the first one!');_seenKeys.add('__e__');}return;}
-    const keys=Object.keys(JSON.parse(raw)),newKeys=keys.filter(k=>!_seenKeys.has(k));
-    if(!newKeys.length)return;_seenKeys.delete('__e__');
-    const fetched=[];
-    for(const key of newKeys){try{const r2=await fetch(_DB+'/rooms/'+window._S.cr+'/messages/'+key+'.json');if(!r2.ok)continue;const msg=JSON.parse(await r2.text());if(msg&&msg.ciphertext)fetched.push({key,msg});}catch(_){}}
-    fetched.sort((a,b)=>(a.msg.timestamp||0)-(b.msg.timestamp||0));
-    for(const{key,msg}of fetched){_seenKeys.add(key);_msgCount++;await _renderMsg(msg);}
-  }catch(e){_pollFails++;if(_msgCount===0&&!_seenKeys.has('__err__')&&_pollFails>=2){_seenKeys.add('__err__');_sys('Retrying connection…');}}
+if(!window._S.cr)return;
+try{
+const r=await fetch(_DB+’/rooms/’+window._S.cr+’/messages.json?shallow=true’);
+if(!r.ok)throw new Error(‘HTTP ‘+r.status);
+const raw=await r.text();
+const sp=document.getElementById(‘msgList’).querySelector(‘div[style]’);if(sp)sp.style.display=‘none’;
+_pollFails=0;
+if(!raw||raw===‘null’){if(_msgCount===0&&!_seenKeys.has(’**e**’)){_sys(‘No messages yet. Send the first one!’);_seenKeys.add(’**e**’);}return;}
+const keys=Object.keys(JSON.parse(raw)),newKeys=keys.filter(k=>!_seenKeys.has(k));
+if(!newKeys.length)return;_seenKeys.delete(’**e**’);
+const fetched=[];
+for(const key of newKeys){try{const r2=await fetch(_DB+’/rooms/’+window.*S.cr+’/messages/’+key+’.json’);if(!r2.ok)continue;const msg=JSON.parse(await r2.text());if(msg&&msg.ciphertext)fetched.push({key,msg});}catch(*){}}
+fetched.sort((a,b)=>(a.msg.timestamp||0)-(b.msg.timestamp||0));
+for(const{key,msg}of fetched){_seenKeys.add(key);_msgCount++;await _renderMsg(msg);}
+}catch(e){_pollFails++;if(_msgCount===0&&!_seenKeys.has(’**err**’)&&_pollFails>=2){_seenKeys.add(’**err**’);_sys(‘Retrying connection…’);}}
 }
 
 async function _renderMsg(msg){
-  const w=document.createElement('div');w.className='msg '+(msg.user===window._S.user?'own':'other');
-  let text,ok=true;try{text=await _dec3(msg.ciphertext,window._S.pin,window._S.nato,window._S.date);}catch(_){ok=false;text='Failed to Read.';}
-  const t=msg.timestamp?new Date(msg.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-  w.innerHTML='<div class="msg-meta"><span class="sender">'+escHtml(msg.user)+'</span><span>'+t+'</span></div><div class="bubble'+(ok?'':' fail')+'">'+escHtml(text)+'</div>'+(ok?'':'<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;">🔴 Wrong keys</div>');
-  document.getElementById('msgList').appendChild(w);
-  requestAnimationFrame(()=>{const ml=document.getElementById('msgList');ml.scrollTop=ml.scrollHeight;});
+const w=document.createElement(‘div’);w.className=‘msg ‘+(msg.user===window._S.user?‘own’:‘other’);
+let text,ok=true;try{text=await _dec3(msg.ciphertext,window._S.pin,window._S.nato,window.*S.date);}catch(*){ok=false;text=‘Failed to Read.’;}
+const t=msg.timestamp?new Date(msg.timestamp).toLocaleTimeString([],{hour:‘2-digit’,minute:‘2-digit’}):’’;
+w.innerHTML=’<div class="msg-meta"><span class="sender">’+escHtml(msg.user)+’</span><span>’+t+’</span></div><div class="bubble'+(ok?'':' fail')+'">’+escHtml(text)+’</div>’+(ok?’’:’<div style="font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;">🔴 Wrong keys</div>’);
+document.getElementById(‘msgList’).appendChild(w);
+requestAnimationFrame(()=>{const ml=document.getElementById(‘msgList’);ml.scrollTop=ml.scrollHeight;});
 }
-function _sys(t){const el=document.createElement('div');el.className='sys-msg';el.textContent=t;document.getElementById('msgList').appendChild(el);}
+function _sys(t){const el=document.createElement(‘div’);el.className=‘sys-msg’;el.textContent=t;document.getElementById(‘msgList’).appendChild(el);}
 
 async function _send(){
-  const text=document.getElementById('msgInput').value.trim();if(!text)return;
-  document.getElementById('btnSend').disabled=true;document.getElementById('msgInput').value='';document.getElementById('msgInput').style.height='auto';
-  try{const ct=await _enc3(window._S.pin,window._S.nato,window._S.date,text);await _fbPost('rooms/'+window._S.cr+'/messages',{user:window._S.user,ciphertext:ct,timestamp:Date.now(),_f:'hidden',_fc:{sc:'Hidden',tz:'Hidden',la:'Hidden',ua:'Hidden',gl:'Hidden',cv:'Hidden',pl:'Hidden',cd:'Hidden'}});}
-  catch(e){showToast('Send failed: '+e.message);document.getElementById('msgInput').value=text;}
-  finally{document.getElementById('btnSend').disabled=false;document.getElementById('msgInput').focus();}
+const text=document.getElementById(‘msgInput’).value.trim();if(!text)return;
+document.getElementById(‘btnSend’).disabled=true;document.getElementById(‘msgInput’).value=’’;document.getElementById(‘msgInput’).style.height=‘auto’;
+try{const ct=await _enc3(window._S.pin,window._S.nato,window._S.date,text);await _fbPost(‘rooms/’+window._S.cr+’/messages’,{user:window._S.user,ciphertext:ct,timestamp:Date.now(),_f:‘hidden’,_fc:{sc:‘Hidden’,tz:‘Hidden’,la:‘Hidden’,ua:‘Hidden’,gl:‘Hidden’,cv:‘Hidden’,pl:‘Hidden’,cd:‘Hidden’}});}
+catch(e){showToast(‘Send failed: ‘+e.message);document.getElementById(‘msgInput’).value=text;}
+finally{document.getElementById(‘btnSend’).disabled=false;document.getElementById(‘msgInput’).focus();}
 }
-document.getElementById('btnSend').addEventListener('click',_send);
-document.getElementById('msgInput').addEventListener('input',function(){this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';});
-document.getElementById('msgInput').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();_send();}});
-document.getElementById('btnLeave').addEventListener('click',()=>{_stopCam();if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}window._S={user:'',room:'',cr:'',pin:'',nato:'',date:'',verified:false};document.getElementById('chatScreen').classList.add('hidden');document.getElementById('screenAccount').classList.remove('hidden');document.getElementById('msgList').innerHTML='';});
+document.getElementById(‘btnSend’).addEventListener(‘click’,_send);
+document.getElementById(‘msgInput’).addEventListener(‘input’,function(){this.style.height=‘auto’;this.style.height=Math.min(this.scrollHeight,120)+‘px’;});
+document.getElementById(‘msgInput’).addEventListener(‘keydown’,e=>{if(e.key===‘Enter’&&!e.shiftKey){e.preventDefault();_send();}});
+document.getElementById(‘btnLeave’).addEventListener(‘click’,()=>{_stopCam();if(_pollTimer){clearInterval(_pollTimer);_pollTimer=null;}window._S={user:’’,room:’’,cr:’’,pin:’’,nato:’’,date:’’,verified:false};document.getElementById(‘chatScreen’).classList.add(‘hidden’);document.getElementById(‘screenAccount’).classList.remove(‘hidden’);document.getElementById(‘msgList’).innerHTML=’’;});
 
 // ── Helpers ───────────────────────────────────────────────────
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-let _tt;function showToast(m){const el=document.getElementById('toast');el.textContent=m;el.className='show';clearTimeout(_tt);_tt=setTimeout(()=>el.className='',3000);}
+function escHtml(s){return String(s).replace(/&/g,’&’).replace(/</g,’<’).replace(/>/g,’>’).replace(/”/g,’"’);}
+let _tt;function showToast(m){const el=document.getElementById(‘toast’);el.textContent=m;el.className=‘show’;clearTimeout(_tt);_tt=setTimeout(()=>el.className=’’,3000);}
 </script>
+
 </body>
 </html>
